@@ -35,6 +35,16 @@ class SupabaseStorage(Storage):
     """
     folder_path=''
 
+    def _build_storage_path(self, name):
+        """Build a bucket-relative path that consistently includes folder_path."""
+        cleaned_name = str(name).lstrip('/') if name else ''
+        cleaned_folder = str(self.folder_path).strip('/') if self.folder_path else ''
+        if cleaned_folder and cleaned_name:
+            return f"{cleaned_folder}/{cleaned_name}"
+        if cleaned_folder:
+            return cleaned_folder
+        return cleaned_name
+
     def __init__(self):
         """Initialize Supabase client."""
         # Get settings
@@ -98,6 +108,7 @@ class SupabaseStorage(Storage):
         # Clean the path
         original_name = name
         name = str(name).lstrip('/')
+        storage_path = self._build_storage_path(name)
         
         logger.info(f"\n{'*' * 70}")
         logger.info(f"FILE SAVE REQUEST TO SUPABASE")
@@ -130,7 +141,7 @@ class SupabaseStorage(Storage):
 
         # Upload to Supabase ONLY
         try:
-            logger.info(f"Uploading to Supabase: {self.bucket_name}/{self.folder_path}/{name}")
+            logger.info(f"Uploading to Supabase: {self.bucket_name}/{storage_path}")
             
             mime_type, _ = mimetypes.guess_type(name)
             file_options = {"upsert": "true"}
@@ -141,13 +152,13 @@ class SupabaseStorage(Storage):
                 logger.debug(f"No MIME type detected for {name}; using default")
 
             response = self.client.storage.from_(self.bucket_name).upload(
-                path=f"{self.folder_path}/{name}",
+                path=storage_path,
                 file=file_content,
                 file_options=file_options
             )
 
             logger.info(f"✓ UPLOAD SUCCESSFUL")
-            logger.info(f"  Path: {self.bucket_name}/{self.folder_path}/{name}")
+            logger.info(f"  Path: {self.bucket_name}/{storage_path}")
             logger.info(f"  Response: {response}")
             logger.info(f"{'*' * 70}\n")
             
@@ -176,10 +187,11 @@ class SupabaseStorage(Storage):
             BytesIO object with file content
         """
         name = str(name).lstrip('/')
-        logger.info(f"Opening file from Supabase: {self.bucket_name}/{name}")
+        storage_path = self._build_storage_path(name)
+        logger.info(f"Opening file from Supabase: {self.bucket_name}/{storage_path}")
 
         try:
-            data = self.client.storage.from_(self.bucket_name).download(name)
+            data = self.client.storage.from_(self.bucket_name).download(storage_path)
             logger.info(f"✓ File opened: {name}")
             return BytesIO(data)
         except Exception as e:
@@ -198,10 +210,11 @@ class SupabaseStorage(Storage):
             return
 
         name = str(name).lstrip('/')
-        logger.info(f"Deleting from Supabase: {self.bucket_name}/{name}")
+        storage_path = self._build_storage_path(name)
+        logger.info(f"Deleting from Supabase: {self.bucket_name}/{storage_path}")
 
         try:
-            self.client.storage.from_(self.bucket_name).remove([name])
+            self.client.storage.from_(self.bucket_name).remove([storage_path])
             logger.info(f"✓ Deleted: {name}")
         except Exception as e:
             logger.warning(f"Could not delete {name}: {str(e)}")
@@ -220,9 +233,10 @@ class SupabaseStorage(Storage):
             return False
 
         name = str(name).lstrip('/')
+        storage_path = self._build_storage_path(name)
 
         try:
-            self.client.storage.from_(self.bucket_name).get_metadata(name)
+            self.client.storage.from_(self.bucket_name).get_metadata(storage_path)
             return True
         except Exception:
             return False
@@ -238,9 +252,10 @@ class SupabaseStorage(Storage):
             (directories, files) tuple
         """
         path = str(path).lstrip('/') if path else ''
+        storage_path = self._build_storage_path(path)
 
         try:
-            response = self.client.storage.from_(self.bucket_name).list(path=path)
+            response = self.client.storage.from_(self.bucket_name).list(path=storage_path)
             dirs = []
             files = []
 
@@ -269,9 +284,10 @@ class SupabaseStorage(Storage):
             return 0
 
         name = str(name).lstrip('/')
+        storage_path = self._build_storage_path(name)
 
         try:
-            metadata = self.client.storage.from_(self.bucket_name).get_metadata(name)
+            metadata = self.client.storage.from_(self.bucket_name).get_metadata(storage_path)
             size = metadata.get('metadata', {}).get('size', 0)
             return size
         except Exception:
@@ -293,7 +309,8 @@ class SupabaseStorage(Storage):
         name = str(name).lstrip('/')
 
         # Construct the public URL
-        url = f"{self.supabase_url}/storage/v1/object/public/{self.bucket_name}/{self.folder_path}/{name}"
+        storage_path = self._build_storage_path(name)
+        url = f"{self.supabase_url}/storage/v1/object/public/{self.bucket_name}/{storage_path}"
         return url
 
     def get_accessed_time(self, name):
@@ -306,9 +323,10 @@ class SupabaseStorage(Storage):
             return None
 
         name = str(name).lstrip('/')
+        storage_path = self._build_storage_path(name)
 
         try:
-            metadata = self.client.storage.from_(self.bucket_name).get_metadata(name)
+            metadata = self.client.storage.from_(self.bucket_name).get_metadata(storage_path)
             return metadata.get('created_at')
         except Exception:
             return None
@@ -319,9 +337,10 @@ class SupabaseStorage(Storage):
             return None
 
         name = str(name).lstrip('/')
+        storage_path = self._build_storage_path(name)
 
         try:
-            metadata = self.client.storage.from_(self.bucket_name).get_metadata(name)
+            metadata = self.client.storage.from_(self.bucket_name).get_metadata(storage_path)
             return metadata.get('updated_at')
         except Exception:
             return None
